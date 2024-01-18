@@ -1,126 +1,78 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
-
 import "forge-std/Test.sol";
-import "../src/MultiSig.sol";
+import "../src/MultiSig.sol"; // Import your MultiSig contract
 
 contract MultiSigTest is Test {
     MultiSig multiSig;
-    address[] owners;
-    uint required;
-    address owner1;
-    address owner2;
-    address owner3;
+    address[] owners = [address(0x1), address(0x2), address(0x3)];
+    uint256 required = 2;
 
     function setUp() public {
-        owners = [address(0x1), address(0x2), address(0x3)];
-        required = 2;
         multiSig = new MultiSig(owners, required);
-        owner1 = address(0x1);
-        owner2 = address(0x2);
-        owner3 = address(0x3);
     }
 
-    function testConstructor() public {
-        // Ensure the contract was initialized correctly
-        assertEq(multiSig.owners(0), owner1);
-        assertEq(multiSig.owners(1), owner2);
-        assertEq(multiSig.owners(2), owner3);
-        assertEq(multiSig.required(), required);
-        assertEq(multiSig.getTransactionCount(), 0);
+    // Test deployment
+    test("deploys successfully") {
+        assertTrue(address(multiSig) != address(0));
     }
 
-    function testSubmitTransaction() public {
-        // Submit a new transaction
-        bytes memory data = hex"";
-        uint256 value = 1 ether;
-
-        vm.prank(owner1);
-        multiSig.submitTransaction(address(this), value, data);
-
-        // Verify the transaction was added
-        assertEq(multiSig.getTransactionCount(), 1);
-        (address destination, uint256 transactionValue, bytes memory transactionData, bool executed, bool canceled) = multiSig.transactions(0);
-        assertEq(destination, address(this));
-        assertEq(transactionValue, value);
-        assertTrue(transactionData.length == 0);
-        assertFalse(executed);
-        assertFalse(canceled);
+    // Test constructor with invalid owner configuration
+    test("reverts with invalid owner configuration") {
+        // Provide invalid owner configuration
+        try setup {
+            MultiSig invalidMultiSig = new MultiSig(owners, 0);
+        } catch {
+            // Assert the expected revert message
+            assertRevert(InvalidOwnerConfiguration(owners.length, 0));
+        }
     }
 
-    function testConfirmTransaction() public {
-        // Submit a new transaction
-        bytes memory data = hex"";
-        uint256 value = 1 ether;
+    // Test transaction submission
+    test("submits a transaction") {
+        address destination = address(0x42);
+        uint256 value = 100;
+        bytes memory data = hex"deadbeef";
 
-        vm.prank(owner1);
-        multiSig.submitTransaction(address(this), value, data);
-
-        // Confirm the transaction by owner2
-        vm.prank(owner2);
-        multiSig.confirmTransaction(0);
-
-        // Verify the confirmation
-        assertTrue(multiSig.confirmations(0, owner2));
-        assertTrue(multiSig.isConfirmed(0));
+        uint256 transactionId = multiSig.submitTransaction(destination, value, data);
+        assertTrue(transactionId > 0);
+        assertEqual(multiSig.transactions[transactionId].destination, destination);
+        assertEqual(multiSig.transactions[transactionId].value, value);
+        assertEqual(multiSig.transactions[transactionId].data, data);
+        assertFalse(multiSig.transactions[transactionId].executed);
+        assertFalse(multiSig.transactions[transactionId].canceled);
     }
 
-    function testExecuteTransaction() public {
-        // Submit and confirm a new transaction
-        bytes memory data = hex"";
-        uint256 value = 1 ether;
+    // Test transaction confirmation
+    test("confirms a transaction and executes when confirmed") {
+        uint256 transactionId = multiSig.submitTransaction(address(this), 0, bytes(""));
+        multiSig.confirmTransaction(transactionId); // Confirm once
 
-        vm.prank(owner1);
-        multiSig.submitTransaction(address(this), value, data);
+        // Assert not executed yet (requires more confirmations)
+        assertFalse(multiSig.transactions[transactionId].executed);
 
-        vm.prank(owner2);
-        multiSig.confirmTransaction(0);
+        // Confirm again to reach required confirmations
+        address owner2 = owners[1];
+        forge_setSender(owner2);
+        multiSig.confirmTransaction(transactionId);
 
-        // Execute the transaction
-        vm.prank(owner1);
-        multiSig.executeTransaction(0);
-
-        // Verify the transaction was executed
-        (, , , bool executed, ) = multiSig.transactions(0);
-        assertTrue(executed);
+        // Assert transaction is executed
+        assertTrue(multiSig.transactions[transactionId].executed);
     }
 
-    function testCancelTransaction() public {
-        // Submit a new transaction
-        bytes memory data = hex"";
-        uint256 value = 1 ether;
+    // Test transaction cancellation
+    test("cancels a transaction") {
+        uint256 transactionId = multiSig.submitTransaction(address(this), 0, bytes(""));
+        multiSig.cancelTransaction(transactionId);
 
-        vm.prank(owner1);
-        multiSig.submitTransaction(address(this), value, data);
-
-        // Cancel the transaction
-        vm.prank(owner1);
-        multiSig.cancelTransaction(0);
-
-        // Verify the transaction was canceled
-        (, , , , bool canceled) = multiSig.transactions(0);
-        assertTrue(canceled);
+        assertTrue(multiSig.transactions[transactionId].canceled);
+        assertFalse(multiSig.transactions[transactionId].executed);
     }
 
-    function testRevertConditions() public {
-        // Test submitting a transaction by a non-owner
-        vm.expectRevert(MultiSig.OnlyOwners.selector);
-        vm.prank(address(0xdead));
-        multiSig.submitTransaction(address(this), 1 ether, "");
-
-        // Test confirming a non-existent transaction
-        vm.expectRevert(MultiSig.InvalidTransactionId.selector);
-        vm.prank(owner1);
-        multiSig.confirmTransaction(999);
-
-        // Test executing a canceled transaction
-        vm.prank(owner1);
-        multiSig.submitTransaction(address(this), 1 ether, "");
-        vm.prank(owner2);
-        multiSig.confirmTransaction(0);
-        vm.prank(owner1);
-        multiSig.cancelTransaction(0);
-        vm.expectRevert(MultiSig.TransactionAlreadyCanceled.selector);
-        multiSig.executeTransaction(0);
+    // Test onlyOwners modifier
+    test("reverts when onlyOwners modifier fails") {
+        try invoke {
+            multiSig.confirmTransaction(0); // Call from a non-owner
+        } catch {
+            assertRevert(OnlyOwners());
+        }
     }
 }
