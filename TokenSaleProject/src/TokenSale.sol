@@ -4,11 +4,16 @@ pragma solidity ^0.8.20;
 import "./ERC20Token.sol";
 import {ITokenSaleErrors} from "./CustomErrors.sol";
 
-/// @title A Contract for Managing Token Sales
-/// @dev This contract handles the presale and public sale of ERC20 tokens
+/**
+ * @title A Contract for Managing Token Sales
+ * @dev This contract handles the presale and public sale of ERC20 tokens
+ */
 contract TokenSale is ITokenSaleErrors {
     ERC20Token public token; // The ERC20 token being sold
     address public owner; // Owner of the contract
+
+    // State variable to track if a function is currently executing
+    bool private inFunction = false;
 
     // Presale parameters
     uint256 public presaleCap; // Maximum amount to be raised in presale
@@ -42,9 +47,19 @@ contract TokenSale is ITokenSaleErrors {
         _;
     }
 
-    /// @notice Creates a new token sale contract
-    /// @dev Initializes the contract with token sale parameters
-    /// @param _tokenAddress Address of the ERC20 token to be sold
+    // Modifier to prevent reentrancy attacks
+    modifier nonReentrant() {
+        require(!inFunction, "Reentrant call");
+        inFunction = true;
+        _;
+        inFunction = false;
+    }
+
+    /**
+     * @notice Creates a new token sale contract
+     * @dev Initializes the contract with token sale parameters
+     * @param _tokenAddress Address of the ERC20 token to be sold
+     */
     constructor(
         address _tokenAddress,
         uint256 _presaleCap,
@@ -77,9 +92,11 @@ contract TokenSale is ITokenSaleErrors {
         publicSaleMinCap = _publicSaleMinCap; // Minimum amount to be raised in public sale
     }
 
-    /// @notice Allows contributions to the presale
-    /// @dev Function to handle presale contributions
-    function contributeToPresale() external payable {
+    /**
+     * @notice Allows contributions to the presale
+     * @dev Function to handle presale contributions
+     */
+    function contributeToPresale() external payable nonReentrant {
         // Custom error handling using imported ITokenSaleErrors interface
         if (block.timestamp > presaleEndTime) revert PresaleEnded();
         if (presaleTotalContributed + msg.value > presaleCap) revert PresaleCapReached();
@@ -97,9 +114,11 @@ contract TokenSale is ITokenSaleErrors {
         emit TokensDistributed(msg.sender, tokensToMint);
     }
 
-    /// @notice Allows contributions to the public sale
-    /// @dev Function to handle public sale contributions
-    function contributeToPublicSale() external payable {
+    /**
+     * @notice Allows contributions to the public sale
+     * @dev Function to handle public sale contributions
+     */
+    function contributeToPublicSale() external payable nonReentrant {
         // Custom error handling using imported ITokenSaleErrors interface
         if (block.timestamp <= presaleEndTime) revert PublicSaleNotStarted();
         if (block.timestamp > publicSaleEndTime) revert PublicSaleEnded();
@@ -118,10 +137,12 @@ contract TokenSale is ITokenSaleErrors {
         emit TokensDistributed(msg.sender, tokensToMint);
     }
 
-    /// @notice Distributes tokens to a specified recipient
-    /// @dev Can only be called by the owner of the contract
-    /// @param recipient Address of the recipient
-    /// @param amount Amount of tokens to distribute
+    /**
+     * @notice Distributes tokens to a specified recipient
+     * @dev Can only be called by the owner of the contract
+     * @param recipient Address of the recipient
+     * @param amount Amount of tokens to distribute
+     */
     function distributeTokens(address recipient, uint256 amount) external onlyOwner {
         if (token.balanceOf(address(this)) < amount) revert InsufficientTokensInContract();
         token.transfer(recipient, amount);
@@ -129,9 +150,11 @@ contract TokenSale is ITokenSaleErrors {
         emit TokensDistributed(recipient, amount);
     }
 
-    /// @notice Allows contributors to claim a refund under certain conditions
-    /// @dev Refunds contributions if certain sale conditions are not met
-    function claimRefund() external {
+    /**
+     * @notice Allows contributors to claim a refund under certain conditions
+     * @dev Refunds contributions if certain sale conditions are not met
+     */
+    function claimRefund() external nonReentrant {
         // Custom error handling using imported ITokenSaleErrors interface
         if (block.timestamp <= publicSaleEndTime) revert PublicSaleNotEnded();
         if (publicSaleTotalContributed >= publicSaleMinCap) revert MinimumCapReached();
