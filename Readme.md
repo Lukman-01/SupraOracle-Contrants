@@ -17,28 +17,32 @@ Each contract is developed using Foundry, a robust development environment for b
 
 ### Prerequisites
 
-- Solidity
-- Foundry (for contract development and testing)
-- Node.js and npm (for any JavaScript-based testing or deployment scripts)
+- Solidity for smart contract development.
+- Foundry for compiling and testing.
+- Node.js and npm for JavaScript-based scripts.
 
 ### Installation and Setup
 
-1. **Clone the repository:**
-
+1. **Clone the Repository:**
    ```bash
-   git clone [https://github.com/Lukman-01/SupraOracle-Contrants.git]
-   cd [SupraOracle-Contrants]
+   git clone  https://github.com/Lukman-01/SupraOracle-Contrants.git
+   cd SupraOracle-Contrants
    ```
 
-2. **Navigate to each contract folder and review the code.**
+2. **Install Foundry:**
+   - Follow the [Foundry installation documentation](https://foundry.paradigm.xyz/).
 
-3. **Use Foundry for compiling and testing the contracts.**
+3. **Compile Contracts:**
+   - Navigate to each contract directory.
+   - Run `forge build` to compile the contracts.
 
 ### Testing
 
-- Each contract directory contains its own set of tests. Run these tests to validate contract functionalities.
-
+- **Run Tests:**
+  - Each contract has its own set of tests in the `test` directory.
+  - Use `forge test` in each contract's directory to run tests.
+  - Ensure all tests pass to validate contract functionalities.
+ 
 ## Authors
 
 - Abdulyekeen lukman
-  
