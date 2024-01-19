@@ -1,23 +1,36 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+/**
+ * @title MultiSig Contract
+ * @dev Implements a multi-signature contract where transactions require multiple confirmations.
+ */
 contract MultiSig {
+    // Mapping to keep track of owners
+    mapping(address => bool) public isOwner;
+    // Array to store all owner addresses
     address[] public owners;
+    // Number of confirmations required for a transaction to be executed
     uint256 public required;
 
+    // Transaction structure to store transaction details
     struct Transaction {
         address destination;
         uint256 value;
         bytes data;
         bool executed;
         bool canceled;
+        uint256 confirmationsCount;
     }
 
+    // Mapping of transaction ID to Transaction struct
     mapping(uint256 => Transaction) public transactions;
+    // Total number of transactions (including executed and pending)
     uint256 public transactionCount;
+    // Mapping to keep track of confirmations for each transaction
     mapping(uint256 => mapping(address => bool)) public confirmations;
 
-    // Custom errors
+    // Custom errors for better gas efficiency and clarity
     error OnlyOwners();
     error InvalidTransactionId();
     error TransactionAlreadyExecuted();
@@ -28,71 +41,65 @@ contract MultiSig {
     error InvalidOwnerConfiguration(uint ownersLength, uint required);
 
     /**
-     * @dev Modifier to restrict a function to only the contract owners.
+     * @dev Modifier to restrict function access to only contract owners.
      */
     modifier onlyOwners() {
-        if (!isOwner(msg.sender)) revert OnlyOwners();
+        if (!isOwner[msg.sender]) revert OnlyOwners();
         _;
     }
 
     /**
-     * @dev Constructor to initialize the contract with owner addresses and required confirmations.
-     * @param _owners The array of owner addresses.
-     * @param _required The number of required confirmations.
+     * @dev Constructor to set up the MultiSig contract.
+     * @param _owners List of owner addresses.
+     * @param _required Number of required confirmations.
      */
     constructor(address[] memory _owners, uint256 _required) {
         if (_owners.length == 0 || _required == 0 || _required > _owners.length) 
             revert InvalidOwnerConfiguration(_owners.length, _required);
 
-        owners = _owners;
+        for (uint256 i = 0; i < _owners.length; i++) {
+            isOwner[_owners[i]] = true;
+            owners.push(_owners[i]);
+        }
         required = _required;
     }
 
-
     /**
-     * @dev Get the total number of transactions.
-     * @return The number of transactions.
+     * @dev Function to submit a new transaction to the contract.
+     * @param _destination Destination address of the transaction.
+     * @param _value Amount of Ether (in Wei) to send.
+     * @param _data Data payload for the transaction.
      */
-    function getTransactionCount() public view returns (uint256) {
-        return transactionCount;
-    }
-
-    /**
-     * @dev Submit a new transaction.
-     * @param _destination The destination address of the transaction.
-     * @param _value The value to be sent with the transaction.
-     * @param _data The data to be included in the transaction.
-     */
-    function submitTransaction(address _destination, uint256 _value, bytes memory _data) public onlyOwners {
+    function submitTransaction(address _destination, uint256 _value, bytes memory _data) public onlyOwners returns(uint256){
         uint256 transactionId = addTransaction(_destination, _value, _data);
         confirmTransaction(transactionId);
+        return transactionId;
     }
 
     /**
-     * @dev Add a new transaction to the list of transactions.
-     * @param _destination The destination address of the transaction.
-     * @param _value The value to be sent with the transaction.
-     * @param _data The data to be included in the transaction.
-     * @return The ID of the added transaction.
+     * @dev Internal function to add a new transaction.
+     * @param _destination Destination address of the transaction.
+     * @param _value Amount of Ether (in Wei) to send.
+     * @param _data Data payload for the transaction.
+     * @return The transaction ID.
      */
     function addTransaction(address _destination, uint256 _value, bytes memory _data) internal returns (uint256) {
-        Transaction memory transaction = Transaction({
+        transactions[transactionCount] = Transaction({
             destination: _destination,
             value: _value,
             data: _data,
             executed: false,
-            canceled: false
+            canceled: false,
+            confirmationsCount: 0
         });
 
-        transactions[transactionCount] = transaction;
         transactionCount++;
-
         return transactionCount - 1;
     }
 
     /**
-     * @dev Confirm a transaction.
-     * @param _id The ID of the transaction to confirm.
+     * @dev Function to confirm a transaction.
+     * @param _id Transaction ID to confirm.
      */
     function confirmTransaction(uint256 _id) public onlyOwners {
         if (_id >= transactionCount) revert InvalidTransactionId();
@@ -102,6 +109,7 @@ contract MultiSig {
         if (confirmations[_id][msg.sender]) revert TransactionAlreadyConfirmed();
 
         confirmations[_id][msg.sender] = true;
+        transaction.confirmationsCount++;
 
         if (isConfirmed(_id)) {
             executeTransaction(_id);
@@ -109,55 +117,30 @@ contract MultiSig {
     }
 
     /**
-    * @dev Get the number of confirmations for a transaction.
-    * @param _transactionId The ID of the transaction.
-    * @return The number of confirmations.
-    */
+     * @dev Function to get the number of confirmations for a transaction.
+     * @param _transactionId Transaction ID.
+     * @return The number of confirmations.
+     */
     function getConfirmationsCount(uint256 _transactionId) public view returns (uint256) {
         if (_transactionId >= transactionCount) revert InvalidTransactionId();
-
-        uint256 count = 0;
-        for (uint256 i = 0; i < owners.length; i++) {
-            if (confirmations[_transactionId][owners[i]]) {
-                count++;
-            }
-        }
-
-        return count;
+        return transactions[_transactionId].confirmationsCount;
     }
 
     /**
-     * @dev Check if an address is one of the contract owners.
-     * @param _address The address to check.
-     * @return True if the address is an owner, false otherwise.
+     * @dev Function to check if a transaction is confirmed.
+     * @param _transactionId Transaction ID.
+     * @return True if the transaction is confirmed, false otherwise.
      */
-    function isOwner(address _address) internal view returns (bool) {
-        for (uint256 i = 0; i < owners.length; i++) {
-            if (owners[i] == _address) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-    * @dev Check if a transaction is confirmed.
-    * @param _transactionId The ID of the transaction.
-    * @return True if the transaction is confirmed, false otherwise.
-    */
     function isConfirmed(uint256 _transactionId) public view returns (bool) {
         if (_transactionId >= transactionCount) revert InvalidTransactionId();
 
-        uint256 requiredConfirmations = required;
-        uint256 confirmationsCount = getConfirmationsCount(_transactionId);
-
-        return confirmationsCount >= requiredConfirmations;
+        return transactions[_transactionId].confirmationsCount >= required;
     }
 
     /**
-    * @dev Execute a confirmed transaction.
-    * @param _transactionId The ID of the transaction to execute.
-    */
+     * @dev Function to execute a confirmed transaction.
+     * @param _transactionId Transaction ID.
+     */
     function executeTransaction(uint256 _transactionId) public onlyOwners {
         if (_transactionId >= transactionCount) revert InvalidTransactionId();
 
@@ -172,9 +155,9 @@ contract MultiSig {
     }
 
     /**
-    * @dev Cancel a transaction.
-    * @param _transactionId The ID of the transaction to cancel.
-    */
+     * @dev Function to cancel a transaction.
+     * @param _transactionId Transaction ID.
+     */
     function cancelTransaction(uint256 _transactionId) public onlyOwners {
         if (_transactionId >= transactionCount) revert InvalidTransactionId();
 
@@ -186,9 +169,7 @@ contract MultiSig {
     }
 
     /**
-     * @dev Fallback function to accept funds at any time.
+     * @dev Fallback function to accept Ether sent to the contract.
      */
-    receive() external payable {
-        // Accept funds at any time
-    }
+    receive() external payable {}
 }
