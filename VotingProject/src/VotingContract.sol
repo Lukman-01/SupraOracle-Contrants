@@ -1,32 +1,51 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/**
- * @title VotingContract
- * @dev A smart contract for managing candidates and voters in an election.
- * This contract allows for the registration of candidates and voters, and enables voting in the election.
- */
 contract VotingContract {
     address private _owner;
+    bool private _electionStarted;
 
     /**
-     * @dev Sets the original `_owner` of the contract to the sender
-     * account. Initializes voter and candidate IDs to 1.
+     * @dev Custom error definitions for specific failure scenarios.
+     */
+    error NotOwner();
+    error ElectionNotStarted();
+    error ElectionAlreadyStarted();
+    error UnauthorizedVoter();
+    error VoterAlreadyRegistered();
+    error VoterNotFound();
+    error CandidateNotFound();
+    error InvalidCandidateId();
+    error AlreadyVoted();
+
+    /**
+     * @dev Constructor to initialize the contract with the deployer as the owner.
      */
     constructor() {
-        _owner = msg.sender;
-        _voterId._value = 1; // Starting from 1
-        _candidateId._value = 1; // Starting from 1
+        _owner = msg.sender; // Setting the contract deployer as the owner
+        _electionStarted = false; // Initial state of the election
     }
 
     /**
-     * @dev Throws if called by any account other than the owner.
+     * @dev Modifier to restrict access to the contract's owner.
      */
     modifier onlyOwner() {
-        require(_owner == msg.sender, "Caller is not the owner");
+        if (msg.sender != _owner) revert NotOwner();
         _;
     }
 
+    /**
+     * @dev Modifier to check if the election has started and if the caller is an authorized voter.
+     */
+    modifier onlyAuthorized() {
+        if (!_electionStarted) revert ElectionNotStarted();
+        if (voters[msg.sender].allowed != 1) revert UnauthorizedVoter();
+        _;
+    }
+
+    /**
+     * @dev Structure to manage incremental IDs.
+     */
     struct Counter {
         uint256 _value;
     }
@@ -34,14 +53,26 @@ contract VotingContract {
     Counter private _voterId;
     Counter private _candidateId;
 
+    /**
+     * @dev Function to increment the counter value.
+     * @param counter The counter to increment.
+     */
     function increment(Counter storage counter) private {
         counter._value += 1;
     }
 
+    /**
+     * @dev Function to get the current value of the counter.
+     * @param counter The counter to retrieve the value from.
+     * @return The current value of the counter.
+     */
     function current(Counter storage counter) private view returns (uint256) {
         return counter._value;
     }
 
+    /**
+     * @dev Structure to store candidate information.
+     */
     struct Candidate {
         uint256 candidateId;
         string name;
@@ -57,6 +88,9 @@ contract VotingContract {
 
     event CandidateCreated(uint256 indexed candidateId, string name, uint8 age, string image, uint256 voteCount, address _address, string ipfs);
 
+    /**
+     * @dev Structure to store voter information.
+     */
     struct Voter {
         uint256 voterId;
         string name;
@@ -74,14 +108,15 @@ contract VotingContract {
     event VoterCreated(uint256 indexed voterId, string name, string image, uint256 allowed, bool voted, uint256 voterVote, string ipfs);
 
     /**
-     * @dev Registers a new candidate. Can only be called by the contract owner.
-     * @param _add The Ethereum address of the candidate to register.
+     * @dev Function to register a new candidate. Can only be called by the owner.
+     * @param _add The address of the candidate.
      * @param _name The name of the candidate.
      * @param _age The age of the candidate.
      * @param _image The image URL of the candidate.
      * @param _ipfs The IPFS hash of additional candidate information.
      */
     function setCandidate(address _add, string memory _name, uint8 _age, string memory _image, string memory _ipfs) external onlyOwner {
+        if (!_electionStarted) revert ElectionNotStarted();
         increment(_candidateId);
         uint256 idNumber = current(_candidateId);
 
@@ -95,12 +130,11 @@ contract VotingContract {
         candidate.ipfs = _ipfs;
 
         candidateAddresses.push(_add);
-
         emit CandidateCreated(idNumber, _name, _age, _image, 0, _add, _ipfs);
     }
 
     /**
-     * @dev Returns the addresses of all registered candidates.
+     * @dev Function to get the addresses of all registered candidates.
      * @return An array of candidate addresses.
      */
     function getCandidateAddresses() external view returns (address[] memory) {
@@ -108,21 +142,18 @@ contract VotingContract {
     }
 
     /**
-     * @dev Returns the data of a specific candidate by their address.
-     * @param _candidateAddress The Ethereum address of the candidate.
-     * @return name The name of the candidate.
-     * @return age The age of the candidate.
-     * @return image The image URL of the candidate.
-     * @return voteCount The current vote count of the candidate.
-     * @return ipfs The IPFS hash of additional candidate information.
+     * @dev Function to get data of a specific candidate by their address.
+     * @param _candidateAddress The address of the candidate.
+     * @return The name, age, image URL, vote count, and IPFS hash of the candidate.
      */
     function getCandidateData(address _candidateAddress) external view returns (string memory, uint8, string memory, uint256, string memory) {
+        if (candidates[_candidateAddress]._address == address(0)) revert CandidateNotFound();
         Candidate memory candidate = candidates[_candidateAddress];
         return (candidate.name, candidate.age, candidate.image, candidate.voteCount, candidate.ipfs);
     }
 
     /**
-     * @dev Returns the total number of registered candidates.
+     * @dev Function to get the total number of registered candidates.
      * @return The total count of candidates.
      */
     function getCandidateCount() external view returns (uint256) {
@@ -130,18 +161,19 @@ contract VotingContract {
     }
 
     /**
-     * @dev Registers a new voter for the election. Can only be called by the contract owner.
-     * @param _add The Ethereum address of the voter.
+     * @dev Function to register a new voter. Can only be called by the owner.
+     * @param _add The address of the voter.
      * @param _name The name of the voter.
      * @param _image The image URL of the voter.
      * @param _ipfs The IPFS hash of additional voter information.
      */
     function registerVoter(address _add, string memory _name, string memory _image, string memory _ipfs) external onlyOwner {
+        if (!_electionStarted) revert ElectionNotStarted();
         increment(_voterId);
         uint256 idNumber = current(_voterId);
 
         Voter storage voter = voters[_add];
-        require(voter.allowed == 0, "Already registered");
+        if (voter.allowed != 0) revert VoterAlreadyRegistered();
 
         voter.voterId = idNumber;
         voter.name = _name;
@@ -152,25 +184,27 @@ contract VotingContract {
         voter.ipfs = _ipfs;
 
         voterAddresses.push(_add);
-
         emit VoterCreated(idNumber, _name, _image, 1, false, 0, _ipfs);
     }
 
+    /**
+     * @dev Modifier to restrict access to registered voters.
+     */
     modifier onlyRegisteredVoter() {
-        require(voters[msg.sender].allowed == 1, "You are not an authorized voter");
+        if (voters[msg.sender].allowed != 1) revert UnauthorizedVoter();
         _;
     }
 
     /**
-     * @dev Allows a registered voter to cast a vote for a candidate.
-     * @param _candidateAddress The Ethereum address of the candidate being voted for.
-     * @param _candidateVoteId The candidate ID to validate the vote.
+     * @dev Function to allow a registered voter to cast a vote.
+     * @param _candidateAddress The address of the candidate being voted for.
+     * @param _candidateVoteId The ID of the candidate to validate the vote.
      */
-    function vote(address _candidateAddress, uint256 _candidateVoteId) external onlyRegisteredVoter {
+    function vote(address _candidateAddress, uint256 _candidateVoteId) external onlyAuthorized {
         Voter storage voter = voters[msg.sender];
-        require(!voter.voted, "You have already voted");
-        require(candidates[_candidateAddress]._address != address(0), "Candidate not found");
-        require(candidates[_candidateAddress].candidateId == _candidateVoteId, "Invalid candidate ID");
+        if (voter.voted) revert AlreadyVoted();
+        if (candidates[_candidateAddress]._address == address(0)) revert CandidateNotFound();
+        if (candidates[_candidateAddress].candidateId != _candidateVoteId) revert InvalidCandidateId();
 
         candidates[_candidateAddress].voteCount += 1;
         voter.voted = true;
@@ -180,7 +214,7 @@ contract VotingContract {
     }
 
     /**
-     * @dev Returns the total number of registered voters.
+     * @dev Function to get the total number of registered voters.
      * @return The total count of voters.
      */
     function getVoterCount() external view returns (uint256) {
@@ -188,43 +222,54 @@ contract VotingContract {
     }
 
     /**
-     * @dev Returns the data of a specific voter by their address. Can only be called by a registered voter.
-     * @param _voterAddress The Ethereum address of the voter.
-     * @return voterId The unique ID of the voter.
-     * @return name The name of the voter.
-     * @return image The image URL of the voter.
-     * @return allowed The allowed status of the voter (1 for allowed, 0 for not allowed).
-     * @return voted A boolean indicating whether the voter has voted.
-     * @return voterVote The ID of the candidate the voter voted for.
-     * @return ipfs The IPFS hash of additional voter information.
+     * @dev Function to get data of a specific voter by their address.
+     * @param _voterAddress The address of the voter.
+     * @return The voter ID, name, image URL, allowed status, voting status, voter's vote, and IPFS hash of the voter.
      */
     function getVoterData(address _voterAddress) external view onlyRegisteredVoter returns (uint256, string memory, string memory, uint256, bool, uint256, string memory) {
+        if (voters[_voterAddress].allowed == 0) revert VoterNotFound();
         Voter memory voter = voters[_voterAddress];
         return (voter.voterId, voter.name, voter.image, voter.allowed, voter.voted, voter.voterVote, voter.ipfs);
     }
 
     /**
-     * @dev Returns the addresses of voters who have already voted.
-     * @return An array of addresses of voted voters.
+     * @dev Function to get the addresses of voters who have already voted.
+     * @return An array of addresses of voters who have voted.
      */
     function getVotedVoters() external view returns (address[] memory) {
         return votedVoters;
     }
 
     /**
-     * @dev Returns the addresses of all registered voters.
-     * @return An array of all registered voter addresses.
+     * @dev Function to get the list of all registered voter addresses.
+     * @return An array of registered voter addresses.
      */
     function getVoterList() external view returns (address[] memory) {
         return voterAddresses;
     }
 
     /**
-     * @dev Retrieves the current vote count for a specific candidate.
-     * @param _candidateAddress The Ethereum address of the candidate.
+     * @dev Function to retrieve the current vote count for a specific candidate.
+     * @param _candidateAddress The address of the candidate.
      * @return The current vote count of the candidate.
      */
     function getVoteCount(address _candidateAddress) external view returns (uint256) {
         return candidates[_candidateAddress].voteCount;
     }
-}    
+
+    /**
+     * @dev Function to start the election. Can only be called by the owner.
+     */
+    function startElection() external onlyOwner {
+        if (_electionStarted) revert ElectionAlreadyStarted();
+        _electionStarted = true;
+    }
+
+     /**
+     * @dev Function to end the election. Can only be called by the owner.
+     */
+    function endElection() external onlyOwner {
+        if (!_electionStarted) revert ElectionNotStarted();
+        _electionStarted = false;
+    }
+}
