@@ -1,78 +1,89 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
 import "forge-std/Test.sol";
 import "../src/MultiSig.sol"; // Import your MultiSig contract
 
 contract MultiSigTest is Test {
     MultiSig multiSig;
-    address[] owners = [address(0x1), address(0x2), address(0x3)];
+    address[] owners;
     uint256 required = 2;
 
     function setUp() public {
+        owners = new address[](3);
+        owners[0] = address(0x1);
+        owners[1] = address(0x2);
+        owners[2] = address(0x3);
         multiSig = new MultiSig(owners, required);
+
+        // Send some Ether to the MultiSig contract for testing transactions that send Ether
+        payable(address(multiSig)).transfer(10 ether);
     }
 
-    // Test deployment
-    test("deploys successfully") {
-        assertTrue(address(multiSig) != address(0));
-    }
 
-    // Test constructor with invalid owner configuration
-    test("reverts with invalid owner configuration") {
-        // Provide invalid owner configuration
-        try setup {
-            MultiSig invalidMultiSig = new MultiSig(owners, 0);
-        } catch {
-            // Assert the expected revert message
-            assertRevert(InvalidOwnerConfiguration(owners.length, 0));
+    // Test deployment and initial state
+    function testDeployment() public {
+        assertEq(multiSig.required(), required);
+        for (uint i = 0; i < owners.length; i++) {
+            assertTrue(multiSig.isOwner(owners[i]));
         }
     }
 
-    // Test transaction submission
-    test("submits a transaction") {
+    // Test submission of a transaction
+    function testSubmitTransaction() public {
+        vm.prank(owners[0]); // Simulate call from the first owner
         address destination = address(0x42);
         uint256 value = 100;
         bytes memory data = hex"deadbeef";
 
         uint256 transactionId = multiSig.submitTransaction(destination, value, data);
-        assertTrue(transactionId > 0);
-        assertEqual(multiSig.transactions[transactionId].destination, destination);
-        assertEqual(multiSig.transactions[transactionId].value, value);
-        assertEqual(multiSig.transactions[transactionId].data, data);
-        assertFalse(multiSig.transactions[transactionId].executed);
-        assertFalse(multiSig.transactions[transactionId].canceled);
+
+        (address dest, uint256 val, bytes memory dat, bool executed, bool canceled, uint256 confirmationsCount) = multiSig.transactions(transactionId);
+        
+        assertEq(dest, destination);
+        assertEq(val, value);
+        assertEq(dat, data);
+        assertFalse(executed);
+        assertFalse(canceled);
+        assertEq(confirmationsCount, 1); // Since submitTransaction also confirms the transaction
     }
 
-    // Test transaction confirmation
-    test("confirms a transaction and executes when confirmed") {
+    // Test confirming a transaction
+    function testConfirmTransaction() public {
+        vm.prank(owners[0]);
         uint256 transactionId = multiSig.submitTransaction(address(this), 0, bytes(""));
-        multiSig.confirmTransaction(transactionId); // Confirm once
 
-        // Assert not executed yet (requires more confirmations)
-        assertFalse(multiSig.transactions[transactionId].executed);
+        assertEq(multiSig.getConfirmationsCount(transactionId), 1); // Already confirmed once
+    }
 
-        // Confirm again to reach required confirmations
-        address owner2 = owners[1];
-        forge_setSender(owner2);
+    // Test executing a transaction
+    function testExecuteTransaction() public {
+        vm.prank(owners[0]);
+        uint256 transactionId = multiSig.submitTransaction(address(this), 1 ether, bytes("")); // Transaction with 1 ether
+
+        vm.prank(owners[1]);
         multiSig.confirmTransaction(transactionId);
 
-        // Assert transaction is executed
-        assertTrue(multiSig.transactions[transactionId].executed);
+        (, , , bool executed, , ) = multiSig.transactions(transactionId);
+        assertTrue(executed);
     }
 
-    // Test transaction cancellation
-    test("cancels a transaction") {
+    // Test canceling a transaction
+    function testCancelTransaction() public {
+        vm.prank(owners[0]);
         uint256 transactionId = multiSig.submitTransaction(address(this), 0, bytes(""));
+
+        vm.prank(owners[0]);
         multiSig.cancelTransaction(transactionId);
 
-        assertTrue(multiSig.transactions[transactionId].canceled);
-        assertFalse(multiSig.transactions[transactionId].executed);
+        (, , , , bool canceled, ) = multiSig.transactions(transactionId);
+        assertTrue(canceled);
     }
 
-    // Test onlyOwners modifier
-    test("reverts when onlyOwners modifier fails") {
-        try invoke {
-            multiSig.confirmTransaction(0); // Call from a non-owner
-        } catch {
-            assertRevert(OnlyOwners());
-        }
+    // Test revert on confirming transaction from non-owner
+    function testFailConfirmTransactionNonOwner() public {
+        uint256 transactionId = multiSig.submitTransaction(address(this), 0, bytes(""));
+        vm.prank(address(0x4)); // Non-owner address
+        multiSig.confirmTransaction(transactionId);
     }
 }
