@@ -38,6 +38,10 @@ contract FixedRateTokenSwapTest is Test {
         tokenA = new MockERC20("Token A", "TKA");
         tokenB = new MockERC20("Token B", "TKB");
         swap = new FixedRateTokenSwap(address(tokenA), address(tokenB), rateAtoB, rateBtoA);
+
+        // Transfer some Token A and Token B to the swap contract for liquidity
+        tokenA.transfer(address(swap), 500000 * 10 ** tokenA.decimals());
+        tokenB.transfer(address(swap), 500000 * 10 ** tokenB.decimals());
     }
 
     /**
