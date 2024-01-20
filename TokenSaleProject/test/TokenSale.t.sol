@@ -6,35 +6,31 @@ import "ds-test/test.sol";
 import "../src/TokenSale.sol";
 import "../src/ERC20Token.sol";
 
-/**
- * @title A test contract for TokenSale
- * @notice This contract tests the functionality of the TokenSale contract
- */
 contract TokenSaleTest is DSTest, Test {
-    // State variables
     TokenSale private tokenSale;
-    ERC20Token private token;
+    Token private token;
     address private deployer;
     address private user1;
-    uint256 private initialSupply = 10000 * 10**18;
     uint256 private presaleCap = 500 ether;
     uint256 private publicSaleCap = 1000 ether;
 
-    /**
-     * @notice Set up the test environment
-     */
     function setUp() public {
         deployer = address(this);
         user1 = address(1);
-        token = new ERC20Token(initialSupply);
+        token = new Token(); // Instantiate the Token contract
+
         tokenSale = new TokenSale(
             address(token),
             presaleCap, 1 ether, 5 ether, block.timestamp + 1 days,
             publicSaleCap, 1 ether, 10 ether, block.timestamp + 2 days,
             200 ether, 500 ether
         );
+
+        // Transfer the initial supply of tokens to the TokenSale contract
+        uint256 initialSupply = token.balanceOf(deployer);
         token.transfer(address(tokenSale), initialSupply);
     }
+
 
     /**
      * @notice Test initial setup of the token sale
@@ -108,7 +104,7 @@ contract TokenSaleTest is DSTest, Test {
         vm.warp(publicSaleEndTime + 1 hours); // Warp to after public sale end
 
         uint256 publicSaleMinCap = tokenSale.publicSaleMinCap();
-        assert(tokenSale.publicSaleTotalContributed() < publicSaleMinCap, "Public sale minimum cap reached");
+        assert(tokenSale.publicSaleTotalContributed() < publicSaleMinCap);
 
         uint256 initialBalance = address(this).balance;
         tokenSale.claimRefund();
