@@ -63,3 +63,7 @@ The project includes a test suite to ensure contract functionalities:
 
 Blockchain Developer: Ibukun
 Linkedin: https://www.linkedin.com/in/lukman-abdulyekeen-75746323a/
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

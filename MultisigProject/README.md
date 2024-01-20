@@ -1,46 +1,69 @@
-# MultiSig Contract Project
+# MultiSig Smart Contract
 
-## Overview
-This project implements a MultiSig (multi-signature) smart contract in Solidity, designed for Ethereum blockchain. The contract allows a group of owners to collectively manage the execution of transactions, which require multiple confirmations before execution.
+This repository hosts a Solidity-based smart contract designed for managing multi-signature transactions. The project utilizes Foundry, a robust development environment, testing framework, and Ethereum Virtual Machine (EVM) interface, specifically tailored for Solidity development.
 
-## Solidity Code
-The main contract, `MultiSig`, is located in the `src` directory. It is written in Solidity version 0.8.20 and follows modern smart contract development practices.
+## Description
 
-### Contract Features
-- Multi-signature functionality
-- Transaction confirmation by multiple owners
-- Execution of confirmed transactions
-- Option to cancel transactions
-- Owner management
+The smart contract suite includes:
+1. **MultiSig**: The main contract that requires multiple confirmations from a set of owners to execute transactions. This enhances security and collaborative decision-making in Ethereum-based applications.
+2. **MultiSigTest**: A comprehensive test suite for the MultiSig contract, ensuring all functionalities behave as expected.
 
-## Design Choices
-- **Modular Structure**: Functions are designed to be self-contained, improving readability and maintainability.
-- **Owner Management**: Utilized a mapping for efficient owner verification and an array for enumeration.
-- **Security Checks**: Implemented checks-effects-interactions pattern to mitigate reentrancy attacks.
-- **Custom Errors**: Used for gas efficiency and clearer error handling.
+## Getting Started
 
-## Security Considerations
-- **Reentrancy Guard**: Ensured that state changes happen before external calls to prevent reentrancy attacks.
-- **Input Validation**: Checked function inputs to prevent invalid or unauthorized actions.
-- **Access Control**: Restricted critical functions to contract owners only.
-- **Fail-Safe Mode**: Implemented cancel functionality to revoke transactions in case of an issue.
+### Prerequisites
 
-## Test Script
-The test script is written using Foundry's `forge-std` and is located in the `test` directory. It demonstrates the contract's functionality through various test scenarios.
+To use this project, you should have:
+- Foundry installed. If it's not installed, you can install it using `curl -L https://foundry.paradigm.xyz | bash`.
+- An Ethereum wallet, such as MetaMask, for interacting with the deployed contract.
 
-### Running Tests
-To run the tests, use the following command:
-```
-forge test
-```
+### Installation
 
-## Test Cases
-Test cases cover both typical usage and edge cases to ensure contract robustness. Key test cases include:
-- Deployment and initialization
-- Submitting, confirming, executing, and canceling transactions
-- Checking for proper access control (only owners can execute certain actions)
-- Edge cases like submitting a transaction with insufficient balance
+1. **Clone the repository:**
 
-## GitHub Repository
-Find all the code, scripts, and documentation for this project at:
-https://github.com/Lukman-01/SupraOracle-Contrants/tree/master/MultisigProject
+   ```bash
+   git clone https://github.com/Lukman-01/SupraOracle-Contrants.git
+   cd MultiSigProject
+   ```
+
+2. **Set up Foundry:**
+
+   Initialize Foundry in your project directory if you haven't already.
+
+   ```bash
+   forge init
+   ```
+
+3. **Install dependencies:**
+
+   Install any external libraries or dependencies using Foundry.
+
+   ```bash
+   forge update
+   ```
+
+4. **Compile the smart contracts:**
+
+   Compile the contracts using Foundry's build system.
+
+   ```bash
+   forge build
+   ```
+
+### Testing
+
+The project comes with a test script (`MultiSigTest.sol`) to verify the contract's functionality:
+
+- Execute the tests with Foundry:
+
+  ```bash
+  forge test
+  ```
+
+## Authors
+
+Blockchain Developer: Ibukun
+Linkedin: [Lukman Abdulyekeen](https://www.linkedin.com/in/lukman-abdulyekeen-75746323a/)
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
