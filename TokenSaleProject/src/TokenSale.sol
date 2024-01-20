@@ -9,7 +9,7 @@ import {ITokenSaleErrors} from "./CustomErrors.sol";
  * @dev This contract handles the presale and public sale of ERC20 tokens
  */
 contract TokenSale is ITokenSaleErrors {
-    ERC20Token public token; // The ERC20 token being sold
+    Token public token; // The ERC20 token being sold
     address public owner; // Owner of the contract
 
     // State variable to track if a function is currently executing
@@ -74,7 +74,7 @@ contract TokenSale is ITokenSaleErrors {
         uint256 _publicSaleMinCap
     ) {
         owner = msg.sender; // Sets the contract deployer as the owner
-        token = ERC20Token(_tokenAddress); // Initializes the ERC20 token
+        token = Token(_tokenAddress); // Initializes the ERC20 token
 
         // Setting up presale parameters
         presaleCap = _presaleCap;
