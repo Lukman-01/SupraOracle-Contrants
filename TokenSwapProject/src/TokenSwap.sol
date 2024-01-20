@@ -9,7 +9,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * at a fixed, predefined exchange rate. It allows users to swap Token A for Token B and vice versa.
  * The contract uses custom error handling for improved gas efficiency and clarity.
  */
-contract FixedRateTokenSwap {
+contract TokenSwap {
     IERC20 public tokenA; // Reference to the contract of Token A
     IERC20 public tokenB; // Reference to the contract of Token B
     uint256 public rateAtoB; // Exchange rate from Token A to Token B
